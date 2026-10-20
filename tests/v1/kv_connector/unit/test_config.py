@@ -215,3 +215,26 @@ def test_kv_offloading_size_only_uses_native_default():
     assert kv_transfer_config.kv_connector == "OffloadingConnector"
     assert kv_transfer_config.kv_role == "kv_both"
     assert kv_connector_extra_config["cpu_bytes_to_use"] == 4.0 * (1 << 30)
+
+
+def test_kv_offloading_size_rejects_other_explicit_connector():
+    """kv_offloading_size must not silently replace a different explicit
+    connector, such as the P/D connector of a disaggregated deployment."""
+    with pytest.raises(ValueError, match="MultiConnector"):
+        VllmConfig(
+            cache_config=CacheConfig(kv_offloading_size=4.0),
+            kv_transfer_config=KVTransferConfig(
+                kv_connector="NixlConnector", kv_role="kv_producer"
+            ),
+        )
+
+
+def test_kv_offloading_size_accepts_matching_explicit_connector():
+    vllm_config = VllmConfig(
+        cache_config=CacheConfig(kv_offloading_size=4.0),
+        kv_transfer_config=KVTransferConfig(
+            kv_connector="OffloadingConnector", kv_role="kv_both"
+        ),
+    )
+
+    assert vllm_config.kv_transfer_config.kv_connector == "OffloadingConnector"

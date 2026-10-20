@@ -1145,17 +1145,28 @@ class VllmConfig:
                 config_connector = "SimpleCPUOffloadConnector"
             else:
                 config_connector = "OffloadingConnector"
-            self.kv_transfer_config.kv_connector = config_connector
-            self.kv_transfer_config.kv_connector_extra_config.update(
-                {"cpu_bytes_to_use": kv_offloading_size * (1 << 30)}
-            )
-        elif kv_offloading_backend == "lmcache":
+        else:
             # Default to LMCache multi-process (MP) mode. The actual KV
             # storage capacity is managed by the standalone LMCache server
             # process, so ``kv_offloading_size`` is not propagated here.
             # ``LMCacheMPConnector`` falls back to ``tcp://localhost:5555``
             # when host/port are not provided via extra_config.
-            self.kv_transfer_config.kv_connector = "LMCacheMPConnector"
+            config_connector = "LMCacheMPConnector"
+
+        explicit_connector = self.kv_transfer_config.kv_connector
+        if explicit_connector not in (None, config_connector):
+            raise ValueError(
+                f"--kv-offloading-size configures {config_connector}, which "
+                f"would replace kv_connector={explicit_connector!r} from "
+                "--kv-transfer-config. To use both connectors, configure a "
+                "MultiConnector in --kv-transfer-config instead."
+            )
+
+        self.kv_transfer_config.kv_connector = config_connector
+        if kv_offloading_backend == "native":
+            self.kv_transfer_config.kv_connector_extra_config.update(
+                {"cpu_bytes_to_use": kv_offloading_size * (1 << 30)}
+            )
 
         # This is the same for all backends
         self.kv_transfer_config.kv_role = "kv_both"
